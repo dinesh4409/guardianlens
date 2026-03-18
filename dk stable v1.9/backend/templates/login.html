@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuardianLens | Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+        .login-card {
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            padding: 2.5rem;
+        }
+        .login-card h2 {
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+        .login-card p {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+        .input-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.02);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        body.dark .input-group input {
+            background: rgba(0,0,0,0.2);
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 0.85rem;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent-primary);
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .login-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+        }
+        .error-message {
+            color: var(--danger);
+            background: rgba(239, 68, 68, 0.1);
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="title-section">
+            <h1>GuardianLens</h1>
+        </div>
+        <button class="toggle-btn" onclick="toggleDarkMode()">
+            <i data-lucide="moon"></i>
+            <span>Toggle Theme</span>
+        </button>
+    </header>
+
+    <main class="login-container">
+        <section class="card login-card">
+            <h2><i data-lucide="lock"></i> Access Restricted</h2>
+            <p>Please enter the default password</p>
+            
+            {% if error %}
+            <div class="error-message">
+                <i data-lucide="alert-circle" size="16" style="display:inline; vertical-align:middle; margin-right:4px;"></i>
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <form action="/login" method="POST">
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter password..." required autofocus>
+                </div>
+                <button type="submit" class="login-btn">
+                    <i data-lucide="log-in"></i> Unlock Dashboard
+                </button>
+            </form>
+        </section>
+    </main>
+</div>
+
+<script>
+lucide.createIcons();
+
+function toggleDarkMode() {
+    const isDark = document.body.classList.toggle("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    const btn = document.querySelector('.toggle-btn i');
+    btn.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+    lucide.createIcons();
+}
+
+window.onload = function() {
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark");
+        document.querySelector('.toggle-btn i').setAttribute('data-lucide', 'sun');
+        lucide.createIcons();
+    }
+};
+</script>
+
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GuardianLens | Keylog Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="title-section">
+            <h1>GuardianLens</h1>
+            <p>Intelligence & Security Analysis Dashboard</p>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+            <button class="toggle-btn" onclick="toggleDarkMode()">
+                <i data-lucide="moon"></i>
+                <span>Theme</span>
+            </button>
+            <a href="/logout" class="toggle-btn" style="text-decoration: none; background: var(--danger);">
+                <i data-lucide="log-out"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+        <!-- Live Log Stream -->
+        <section class="card card-full">
+            <h2><i data-lucide="terminal"></i> Live Readable Activity</h2>
+            <pre id="logText" class="custom-scrollbar">{{ text }}</pre>
+        </section>
+
+        <!-- Sensitive Detection -->
+        <section class="card">
+            <h2><i data-lucide="shield-alert"></i> Detected Sensitive Words</h2>
+            <ul id="detectedWords" style="max-height: 260px; overflow-y: auto; padding-right: 6px;">
+                {% if detected %}
+                    {% for word in detected %}
+                        <li class="danger-item">
+                            <span>{{ word }}</span>
+                            <i data-lucide="alert-triangle" size="18"></i>
+                        </li>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty-state">No sensitive words detected.</p>
+                {% endif %}
+            </ul>
+        </section>
+
+        <!-- App Activity Chart -->
+        <section class="card">
+            <h2><i data-lucide="pie-chart"></i> App Usage Distribution</h2>
+            <div class="chart-container">
+                <canvas id="appChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Daily App Usage Chart -->
+        <section class="card card-full">
+            <h2><i data-lucide="calendar"></i> Daily App Usage</h2>
+            <div class="chart-container" style="height: 350px;">
+                <canvas id="dailyAppChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Word Frequency -->
+        <section class="card">
+            <h2><i data-lucide="bar-chart-3"></i> Intelligence Metrics</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Identified Word</th>
+                            <th>Occurrence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="frequencyTable">
+                        {% for word, count in frequency %}
+                        <tr>
+                            <td>{{ word }}</td>
+                            <td><span class="count-badge">{{ count }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Top Risk Alerts -->
+        <section class="card">
+            <h2><i data-lucide="siren"></i> Top Risk Alerts <span style="font-size: 0.8em; color: var(--danger); font-weight: normal;">(High Priority)</span></h2>
+            <div id="riskAlertsContainer" style="max-height: 540px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 6px;">
+                <p class="empty-state">No risk alerts detected.</p>
+            </div>
+        </section>
+
+        <!-- Recent App Telemetry -->
+        <section class="card card-full">
+            <h2><i data-lucide="monitor"></i> Recent App Telemetry</h2>
+            <div class="table-container" style="max-height: 400px;">
+                <table id="telemetryTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Application</th>
+                            <th>Time Spent (s)</th>
+                            <th>Window Title</th>
+                        </tr>
+                    </thead>
+                    <tbody id="telemetryBody">
+                        <tr><td colspan="4" class="empty-state">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script>
+// Initialize Lucide Icons
+lucide.createIcons();
+
+// 🔥 Live Data Fetch
+function fetchLiveData() {
+    fetch("/live-data")
+        .then(response => response.json())
+        .then(data => {
+            // Update log text
+            document.getElementById("logText").innerText = data.text;
+
+            // Update detected words
+            let detectedDiv = document.getElementById("detectedWords");
+            detectedDiv.innerHTML = "";
+
+            if (data.detected.length > 0) {
+                data.detected.forEach(word => {
+                    detectedDiv.innerHTML += `
+                        <li class="danger-item">
+                            <span>${word}</span>
+                            <i data-lucide="alert-triangle" size="18"></i>
+                        </li>`;
+                });
+            } else {
+                detectedDiv.innerHTML = "<p class='empty-state'>No sensitive words detected.</p>";
+            }
+
+            // Update frequency table
+            let freqTable = document.getElementById("frequencyTable");
+            freqTable.innerHTML = "";
+
+            data.frequency.forEach(item => {
+                freqTable.innerHTML += `
+                    <tr>
+                        <td>${item[0]}</td>
+                        <td><span class="count-badge">${item[1]}</span></td>
+                    </tr>`;
+            });
+
+            // Update Risk Alerts
+            let riskContainer = document.getElementById("riskAlertsContainer");
+            if (riskContainer) {
+                riskContainer.innerHTML = "";
+                if (data.risk_alerts && data.risk_alerts.length > 0) {
+                    const isDark = document.body.classList.contains('dark');
+                    const cardBg = isDark ? '#1e293b' : '#f8fafc';
+                    const textColor = isDark ? '#cbd5e1' : '#334155';
+                    const metaColor = isDark ? '#94a3b8' : '#64748b';
+                    const badgeBg = isDark ? '#334155' : '#e2e8f0';
+                    const borderColor = isDark ? '#334155' : '#e2e8f0';
+
+                    data.risk_alerts.forEach(alert => {
+                        let severityColor = "#10b981"; // Low (Green)
+                        if (alert.severity === "High") severityColor = "#ef4444";
+                        else if (alert.severity === "Medium") severityColor = "#f59e0b";
+
+                        let icon = alert.name === "NSFW Activity Spike" ? "flame" : "shield-alert";
+                        
+                        riskContainer.innerHTML += `
+                            <div class="risk-alert-card" style="border-left: 4px solid ${severityColor}; background: ${cardBg};">
+                                <div class="risk-alert-header">
+                                    <h3 style="color: ${severityColor};">
+                                        <i data-lucide="${icon}" size="16"></i> ${alert.name}
+                                    </h3>
+                                    <span class="risk-alert-badge" style="color: ${metaColor}; background: ${badgeBg};">${alert.severity}</span>
+                                </div>
+                                <div class="risk-alert-words" style="color: ${textColor};">
+                                    <strong>Words Triggered (${alert.word_count}):</strong> ${alert.words.join(', ')}
+                                </div>
+                                <div class="risk-alert-footer" style="color: ${metaColor}; border-top-color: ${borderColor};">
+                                    <span class="risk-alert-meta">
+                                        <i data-lucide="clock" size="12"></i> ${alert.time}
+                                    </span>
+                                    <span class="risk-alert-meta" title="${alert.app}">
+                                        <i data-lucide="monitor" size="12"></i> ${alert.app}
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    riskContainer.innerHTML = "<p class='empty-state'>No risk alerts detected.</p>";
+                }
+            }
+
+            // Update Chart
+            updateChart(data.app_stats);
+
+            // Update Daily Chart
+            if (data.daily_app_stats) {
+                updateDailyChart(data.daily_app_stats);
+            }
+
+            // Re-initialize icons for dynamic content
+            lucide.createIcons();
+        });
+}
+
+// 📋 Fetch & Render Telemetry Table
+function fetchTelemetry() {
+    fetch("/app-telemetry")
+        .then(res => res.json())
+        .then(entries => {
+            const tbody = document.getElementById("telemetryBody");
+            if (!entries || entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No telemetry data yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = entries.map(e => {
+                // format timestamp: show only HH:MM:SS from ISO string
+                const ts = e.timestamp ? e.timestamp.replace('T', ' ').split('.')[0] : '-';
+                return `<tr>
+                    <td style="white-space:nowrap;font-family:monospace;font-size:0.8rem">${ts}</td>
+                    <td><span class="count-badge" style="background:var(--primary,#3b82f6);color:#fff">${e.app}</span></td>
+                    <td>${e.duration}s</td>
+                    <td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.title}">${e.title || '-'}</td>
+                </tr>`;
+            }).join('');
+        })
+        .catch(() => {});
+}
+
+setInterval(fetchTelemetry, 2000);
+fetchTelemetry();
+
+// 📊 Chart.js Logic
+let appChart;
+
+function updateChart(appStats) {
+    const ctx = document.getElementById('appChart').getContext('2d');
+    
+    const labels = appStats.map(item => item.app);
+    const durations = appStats.map(item => item.duration);
+    
+    // Limit to top 5 for better visualization
+    const topLabels = labels.slice(0, 5);
+    const topDurations = durations.slice(0, 5);
+
+    if (appChart) {
+        appChart.data.labels = topLabels;
+        appChart.data.datasets[0].data = topDurations;
+        appChart.update();
+    } else {
+        appChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: topLabels,
+                datasets: [{
+                    label: 'Time Spent (s)',
+                    data: topDurations,
+                    backgroundColor: [
+                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: document.body.classList.contains('dark') ? '#e2e8f0' : '#1e293b'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+let dailyAppChart;
+const CACHED_COLORS = {};
+const CHART_COLORS = [
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+    '#06b6d4', '#ec4899', '#f97316', '#6366f1', '#14b8a6'
+];
+
+function updateDailyChart(dailyAppStats) {
+    const ctx = document.getElementById('dailyAppChart').getContext('2d');
+    
+    // Sort dates chronologically
+    const dates = Object.keys(dailyAppStats).sort();
+    
+    // Gather all unique apps across all days
+    const allApps = new Set();
+    dates.forEach(date => {
+        Object.keys(dailyAppStats[date]).forEach(app => allApps.add(app));
+    });
+    
+    const appsList = Array.from(allApps);
+    
+    // Build datasets
+    const datasets = [];
+    appsList.forEach((app, index) => {
+        // Assign consistent color based on app name
+        if (!CACHED_COLORS[app]) {
+            CACHED_COLORS[app] = CHART_COLORS[Object.keys(CACHED_COLORS).length % CHART_COLORS.length];
+        }
+        
+        const data = dates.map(date => dailyAppStats[date][app] || 0);
+        
+        // Only include dataset if there's > 0 usage on at least one day
+        if (data.some(val => val > 0)) {
+            datasets.push({
+                label: app,
+                data: data,
+                backgroundColor: CACHED_COLORS[app],
+                borderWidth: 0
+            });
+        }
+    });
+
+    if (dailyAppChart) {
+        // Only update if the data has actually changed to prevent flickering/blinking
+        const currentLabels = JSON.stringify(dailyAppChart.data.labels);
+        const newLabels = JSON.stringify(dates);
+        
+        let dataChanged = false;
+        if (currentLabels !== newLabels || dailyAppChart.data.datasets.length !== datasets.length) {
+            dataChanged = true;
+        } else {
+            for (let i = 0; i < datasets.length; i++) {
+                if (JSON.stringify(dailyAppChart.data.datasets[i].data) !== JSON.stringify(datasets[i].data) ||
+                    dailyAppChart.data.datasets[i].label !== datasets[i].label) {
+                    dataChanged = true;
+                    break;
+                }
+            }
+        }
+
+        if (dataChanged) {
+            dailyAppChart.data.labels = dates;
+            dailyAppChart.data.datasets = datasets;
+            dailyAppChart.update();
+        }
+    } else {
+        dailyAppChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: dates,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: { color: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b' },
+                        grid: { color: document.body.classList.contains('dark') ? '#334155' : '#e2e8f0' }
+                    },
+                    y: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Time Spent (s)',
+                            color: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b'
+                        },
+                        ticks: { color: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b' },
+                        grid: { color: document.body.classList.contains('dark') ? '#334155' : '#e2e8f0' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: document.body.classList.contains('dark') ? '#e2e8f0' : '#1e293b'
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Update every 2 seconds for performance
+setInterval(fetchLiveData, 2000);
+fetchLiveData();
+
+// 🌙 Dark Mode Toggle
+function toggleDarkMode() {
+    const isDark = document.body.classList.toggle("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    
+    // Update toggle icon
+    const btn = document.querySelector('.toggle-btn i');
+    btn.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+    lucide.createIcons();
+
+    // Update Chart Colors
+    const textColor = isDark ? '#e2e8f0' : '#1e293b';
+    const gridColor = isDark ? '#334155' : '#e2e8f0';
+    const tickColor = isDark ? '#94a3b8' : '#64748b';
+
+    if (appChart) {
+        appChart.options.plugins.legend.labels.color = textColor;
+        appChart.update();
+    }
+
+    if (dailyAppChart) {
+        dailyAppChart.options.plugins.legend.labels.color = textColor;
+        dailyAppChart.options.scales.x.ticks.color = tickColor;
+        dailyAppChart.options.scales.x.grid.color = gridColor;
+        dailyAppChart.options.scales.y.ticks.color = tickColor;
+        dailyAppChart.options.scales.y.grid.color = gridColor;
+        dailyAppChart.options.scales.y.title.color = tickColor;
+        dailyAppChart.update();
+    }
+}
+
+// Load saved theme on page load
+window.onload = function() {
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark");
+        document.querySelector('.toggle-btn i').setAttribute('data-lucide', 'sun');
+        lucide.createIcons();
+    }
+};
+</script>
+
+</body>
+</html>
