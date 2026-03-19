@@ -70,12 +70,17 @@ python app.py
 
 2. Access the dashboard via your browser at `http://localhost:2000`.
 3. Frontend scripts can be run to send requests to the backend for monitoring and logging activity.
+```bash
 cd frontend
 python app-activity.py
+```
 
 in another terminal
+
+```bash
 cd frontend
 python key-logger.py
+```
 
 
 ## Contributing
